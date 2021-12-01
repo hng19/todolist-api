@@ -13,18 +13,35 @@ Các chức năng có trong ứng dụng todolist
 const todo_list = document.querySelector(".todo-list");
 const todo_input = document.getElementById("todo-input");
 const btn_add = document.getElementById("btn-add");
+const todo_option_item = document.querySelectorAll(".todo-option-item input");
 
 // Khai báo biến
 let todos = [];
+let isUpdate = false;
+let idUpdate = null;
 
+// Random id
 function createId() {
     return Math.floor(Math.random() * 100000);
 }
 
 // ============== API ===============
 // API lấy danh sách todo
-function getTodosAPI() {
-    return axios.get("/todos"); // => luôn trả về promise
+function getTodosAPI(status) {
+    switch (status) {
+        case "all": {
+            return axios.get("/todos");
+        }
+        case "active": {
+            return axios.get("/todos?status=true");
+        }
+        case "unactive": {
+            return axios.get("/todos?status=false");
+        }
+        default: {
+            return axios.get("/todos");
+        }
+    }
 }
 
 // API thêm công việc
@@ -44,6 +61,15 @@ function deleteTodoAPI(id) {
     })
 }
 
+// API cập nhật công việc
+function updateTodoAPI(todo) {
+    return axios({
+        method: "put",
+        url: `/todos/${todo.id}`,
+        data: todo,
+    });
+}
+
 
 // Render UI - Hiển thị danh sách todo ra ngoài giao diện
 function renderUI(arr) {
@@ -61,11 +87,15 @@ function renderUI(arr) {
         todo_list.innerHTML += `
             <div class="todo-item ${t.status ? "active-todo" : ""}">
                 <div class="todo-item-title">
-                    <input type="checkbox" ${t.status ? "checked" : ""}/>
+                    <input 
+                        type="checkbox" 
+                        ${t.status ? "checked" : ""}
+                        onclick="toggleStatus(${t.id})"
+                    />
                     <p>${t.title}</p>
                 </div>
                 <div class="option">
-                    <button class="btn btn-update">
+                    <button class="btn btn-update" onclick="updateTitle(${t.id})">
                         <img src="./img/pencil.svg" alt="icon" />
                     </button>
                     <button class="btn btn-delete" onclick=deleteTodo(${t.id})>
@@ -79,9 +109,9 @@ function renderUI(arr) {
 
 // ============= Hàm xử lý =============
 // Lấy danh sách todo
-async function getTodos() {
+async function getTodos(status) {
     try {
-        const res = await getTodosAPI();
+        const res = await getTodosAPI(status);
         todos = res.data;
 
         // Render ra ngoài giao diện
@@ -123,17 +153,98 @@ async function deleteTodo(id) {
     }
 }
 
-// Thêm công việc
+// Hàm xử lý thay đổi trạng thái công việc
+async function toggleStatus(id) {
+    try {
+        let todo = todos.find((todo) => todo.id == id);
+        todo.status = !todo.status;
+
+        let res = await updateTodoAPI(todo);
+
+        todos.forEach((todo, index) => {
+            if (todo.id == id) {
+                todos[index] = res.data;
+            }
+        });
+        renderUI(todos);
+    } catch (error) {
+        console.log(error);
+    }
+}
+
+// Hàm xử lý thay đổi tiêu đề công việc
+async function updateTodo(todoUpdate) {
+    try {
+        let res = await updateTodoAPI(todoUpdate);
+
+        todos.forEach((todo, index) => {
+            if (todo.id == todoUpdate.id) {
+                todos[index] = res.data;
+            }
+        });
+
+        btn_add.innerText = "Thêm";
+        isUpdate = false;
+        idUpdate = null;
+
+        renderUI(todos);
+    } catch (error) {
+        console.log(error);
+    }
+}
+
+// Lấy giá trị trong 1 ô input radio
+function getOptionSelected() {
+    for (let i = 0; i < todo_option_item.length; i++) {
+        if (todo_option_item[i].checked) {
+            return todo_option_item[i].value;
+        }
+    }
+}
+
+todo_option_item.forEach((btn) => {
+    btn.addEventListener("change", function () {
+        let optionSelected = getOptionSelected();
+        getTodos(optionSelected);
+    });
+});
+
+// Thêm công việc và cập nhật tiêu đề công việc
 btn_add.addEventListener("click", function () {
-    let todoTitle = todo_input.value; // Lấy ra nội dung trong ô input
-    if(todoTitle == "") {
-        alert("Tiêu đề không được để trống")
-        return
+    let todoTitle = todo_input.value;
+    if (todoTitle == "") {
+        alert("Nội dung không được để trống!");
+        return;
+    }
+    if (isUpdate) {
+        let todo = todos.find((todo) => todo.id == idUpdate);
+        todo.title = todoTitle;
+
+        updateTodo(todo);
+    } else {
+        createTodo(todoTitle);
     }
 
-    createTodo(todoTitle)
-    todo_input.value = ""
+    todo_input.value = "";
 });
+
+// Cập nhật tiêu đề todo
+function updateTitle(id) {
+    let title;
+    todos.forEach((todo) => {
+        if (todo.id == id) {
+            title = todo.title;
+        }
+    });
+
+    btn_add.innerText = "CẬP NHẬT";
+
+    todo_input.value = title;
+    todo_input.focus();
+
+    idUpdate = id;
+    isUpdate = true;
+}
 
 window.onload = () => {
     getTodos();
